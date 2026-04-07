@@ -1,0 +1,19 @@
+[Unit]
+Description=FortiGuard Captive Portal Auto-Login
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Edit the path and credentials below, or use a credentials file (see README)
+ExecStart=/usr/bin/python3 /opt/fortiguard_login.py \
+    --username YOUR_USERNAME \
+    --password YOUR_PASSWORD \
+    --interval 60
+Restart=always
+RestartSec=10
+# Run as your own user so it has access to your session keyring if needed
+User=%i
+
+[Install]
+WantedBy=multi-user.target
