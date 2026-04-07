@@ -221,6 +221,68 @@ launchctl unload ~/Library/LaunchAgents/com.user.fortiguard-autologin.plist
 
 ---
 
+## Android — standalone (no Mac required)
+
+Both auto-login and firewall bypass can run entirely on Android with no Mac involved.
+
+### Auto-login + keepalive on Android (Termux)
+
+[Termux](https://f-droid.org/packages/com.termux/) is a free Linux terminal for Android that can run our existing Python script directly.
+
+```bash
+# 1. Install Termux from F-Droid (NOT Play Store — the Play Store version is outdated)
+#    https://f-droid.org/packages/com.termux/
+
+# 2. Inside Termux, install Python
+pkg update && pkg install python git
+
+# 3. Get the script
+git clone https://github.com/YOUR_USERNAME/W.git
+cd W
+
+# 4. Run it (same as on Mac)
+python fortiguard_login.py -u your_username@college.edu
+```
+
+To keep it running when you lock your phone:
+- Swipe down → long-press the Termux notification → turn off "Pause execution when screen off"
+- Or run `termux-wake-lock` inside Termux before starting the script
+
+### Firewall bypass on Android (WireGuard VPN)
+
+WireGuard is a lightweight VPN that runs as an Android app. Once set up, all your Android traffic exits through your VPS — FortiGuard can't see or block it.
+
+**Step 1 — Run the setup script on your VPS** (one-time, ~2 minutes):
+
+```bash
+# From your Mac, pipe the script directly into SSH:
+ssh ubuntu@<your-vps-ip> "bash -s" < setup_wireguard_vps.sh
+```
+
+This installs WireGuard on the VPS, configures it as a VPN server, and prints a **QR code** in your terminal.
+
+> **Oracle Cloud users:** After running the script, you also need to open port 51820/UDP in the OCI Console:
+> Networking → Virtual Cloud Networks → your VCN → Security Lists → Default Security List
+> → Add Ingress Rule → Source: `0.0.0.0/0`, Protocol: UDP, Port: `51820`
+> The script will remind you of this.
+
+**Step 2 — Connect Android**:
+
+1. Install **WireGuard** from the Play Store (free, open source by the WireGuard project)
+2. Tap **+** → **Scan from QR code**
+3. Scan the QR code printed by the setup script
+4. Toggle the tunnel **ON**
+
+That's it. All Android traffic now bypasses FortiGuard. Toggle it off when you leave campus.
+
+**To re-display the QR code later** (if you missed it):
+```bash
+ssh ubuntu@<your-vps-ip>
+qrencode -t ansiutf8 < ~/android-wireguard.conf
+```
+
+---
+
 ## All flags
 
 ```
