@@ -1,167 +1,53 @@
-# FortiGuard Auto-Login + Firewall Bypass
+# College WiFi Auto-Login + Website Unblock
 
-Silently handles your college FortiGuard WiFi so you can stop thinking about it:
+Your college WiFi kicks you out every few hours and blocks websites you need.
+This tool fixes both — automatically. Set it up once, forget about it.
 
-1. **Auto-login** — detects when the captive portal kicks in and logs you back in automatically
-2. **Keepalive** — sends periodic pings to the portal so your session *never* expires (no more 4-hour countdowns)
-3. **SSH tunnel** — routes your browser traffic through an external server, bypassing FortiGuard web filtering entirely
-4. **DNS-over-HTTPS** — encrypts DNS queries via cloudflared to defeat DNS-based blocks (no external server needed)
-
-**Requirements:** Python 3.10+, no third-party packages.
+> **Want all the technical details?** See [README-alt.md](README-alt.md).
 
 ---
 
-## Quick start
+## What do you want to fix?
 
-```bash
-# Runs indefinitely — prompts for password (safer than passing it on the command line)
-python3 fortiguard_login.py -u your_username@college.edu
+**Pick your situation:**
 
-# All flags
-python3 fortiguard_login.py -u your_username -p 'yourpass' --interval 90
+- **"Just stop the annoying login page"** → [Section A](#section-a--stop-the-login-page) — 5 minutes, nothing extra needed
+- **"Also unblock websites"** → [Section B](#section-b--unblock-websites) — 15 minutes, requires a free server (we'll get one)
 
-# One-shot: login once and exit
-python3 fortiguard_login.py -u your_username --once
-
-# Verbose output (shows keepalive pings, portal HTML, etc.)
-python3 fortiguard_login.py -u your_username -v
-```
+You can do both. Start with A, add B later if you want.
 
 ---
 
-## Bypass FortiGuard web filtering
+## Section A — Stop the login page
 
-FortiGuard blocks websites by category (social media, gaming, VPNs, etc.).
-Two options to defeat this — pick based on what you have available.
+Every time the college WiFi makes you log in, this script detects it and logs you back in automatically. It also keeps sending tiny "I'm still here" pings so your session never expires — no more 4-hour countdowns.
 
----
+### On your Mac
 
-### Option A — SSH SOCKS5 tunnel (best, bypasses everything)
+**Step 1 — Check Python is installed**
 
-**What it does:** Creates a tunnel between your machine and an external server. All your browser traffic exits from *that* server's IP, completely invisible to FortiGuard — bypasses both DNS filtering and HTTPS inspection.
+Open Terminal and run:
+```bash
+python3 --version
+```
+If you see a version number, you're good. If not, download Python from python.org.
 
-**Step 1 — Get a free VPS (Oracle Cloud Free Tier)**
-
-A VPS is just a Linux server in a data centre you control. Oracle's free tier is genuinely free forever (not a trial):
-
-1. Sign up at **cloud.oracle.com/free** — use a personal email
-2. Create an instance: Compute → Instances → Create Instance
-   - Image: **Ubuntu 22.04**
-   - Shape: **VM.Standard.A1.Flex** (ARM, free tier) — set 1 OCPU, 6 GB RAM
-   - Under "Add SSH keys": upload your existing public key (`~/.ssh/id_rsa.pub`) or generate a new one
-3. Once running, note the **Public IP address**
-4. Allow SSH inbound in the Security List (port 22 is open by default)
-5. Test: `ssh ubuntu@<your-vps-ip>` — if it connects, you're good
-
-> **Alternative if you have a Raspberry Pi at home:** Use it as the "VPS".
-> You'll need to enable SSH on the Pi and set up port forwarding (port 22) on your home router,
-> plus a free Dynamic DNS service (e.g. duckdns.org) since your home IP changes.
-> This is free but more involved to set up.
-
-**Step 2 — Run the script with your VPS**
+**Step 2 — Run the script**
 
 ```bash
-# Mac only
-python3 fortiguard_login.py \
-  -u your_username@college.edu \
-  --ssh-host <your-vps-ip> \
-  --ssh-user ubuntu \
-  --ssh-identity ~/.ssh/id_rsa    # omit if using default key
-
-# Mac + Android phone (add --share-proxy)
-python3 fortiguard_login.py \
-  -u your_username@college.edu \
-  --ssh-host <your-vps-ip> \
-  --ssh-user ubuntu \
-  --share-proxy
+python3 fortiguard_login.py -u YOUR_COLLEGE_EMAIL
 ```
 
-`--share-proxy` binds the SOCKS5 proxy on all network interfaces so your Android
-phone (or any other device on the same WiFi) can route through it. The script
-will print your Mac's local IP and the exact Android settings to use.
+Replace `YOUR_COLLEGE_EMAIL` with your actual login. It will ask for your password — type it in (nothing will appear on screen, that's normal).
 
-This:
-- Logs into the FortiGuard portal and keeps the session alive
-- Maintains an SSH SOCKS5 proxy (on `localhost:1080`, or LAN-wide with `--share-proxy`)
-- Auto-restarts the tunnel if it drops
+The script is now watching in the background. Every time the login page appears, it logs you in automatically.
 
-**Step 3 — Point your Mac's browser at the proxy**
+**Step 3 — Make it start automatically when you open your Mac**
 
-*Firefox (recommended — no root needed):*
-1. Settings → General → scroll to Network Settings → Settings…
-2. Manual proxy configuration
-3. SOCKS Host: `127.0.0.1`, Port: `1080`, SOCKS v5
-4. Check **"Proxy DNS when using SOCKS v5"** ← important, this also defeats DNS filtering
-5. OK
+You don't want to remember to run this every time. Do this once:
 
-*System-wide on macOS (affects all apps):*
-```bash
-# Enable (run once)
-sudo networksetup -setsocksfirewallproxy Wi-Fi 127.0.0.1 1080
-sudo networksetup -setsocksfirewallproxystate Wi-Fi on
-
-# Disable when not on college WiFi
-sudo networksetup -setsocksfirewallproxystate Wi-Fi off
-```
-
-**Step 4 — Point your Android phone at the proxy**
-
-Your Mac and Android must be on the **same WiFi network** (both on college WiFi).
-
-1. On Android: **Settings → Wi-Fi → long-press your college network → Modify network**
-2. Expand **Advanced options**
-3. Proxy: **Manual**
-4. Proxy hostname: *(your Mac's local IP — printed by the script when `--share-proxy` is set)*
-5. Proxy port: `1080`
-6. Save
-
-To also bypass DNS filtering on Android (no VPS needed for this part):
-- Settings → **Network & internet → Advanced → Private DNS**
-- Select **Private DNS provider hostname**
-- Enter: `1dot1dot1dot1.cloudflare-dns.com`
-- This is Android's built-in DNS-over-HTTPS — works independently of the proxy
-
-**Verify it's working:**
-```bash
-# On Mac
-curl --socks5 127.0.0.1:1080 https://ipinfo.io
-# Should show your VPS's IP, not your college's IP
-
-# On Android — open https://ipinfo.io in browser
-# Should show your VPS's IP
-```
-
----
-
-### Option B — DNS-over-HTTPS via cloudflared (no VPS needed, partial bypass)
-
-Defeats blocks that rely on DNS filtering (~60-70% of FortiGuard blocks). Does **not** bypass HTTPS deep-packet inspection.
-
-**Install cloudflared:**
-```bash
-brew install cloudflare/cloudflare/cloudflared
-```
-
-**Run with DoH enabled:**
-```bash
-python3 fortiguard_login.py -u your_username --doh
-```
-
-**Point macOS DNS at the local proxy** (one-time, run while on college WiFi):
-```bash
-sudo networksetup -setdnsservers Wi-Fi 127.0.0.1
-```
-
-Revert when you leave:
-```bash
-sudo networksetup -setdnsservers Wi-Fi empty
-```
-
----
-
-## Run automatically at login (macOS launchd)
-
-Create `~/Library/LaunchAgents/com.user.fortiguard-autologin.plist`:
+1. **Open TextEdit**, then go to Format → Make Plain Text
+2. **Paste this in**, replacing `YOUR_USERNAME`, `YOUR_PASSWORD`, and `YOUR_NAME` with your actual details:
 
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
@@ -171,153 +57,281 @@ Create `~/Library/LaunchAgents/com.user.fortiguard-autologin.plist`:
 <dict>
   <key>Label</key>
   <string>com.user.fortiguard-autologin</string>
-
   <key>ProgramArguments</key>
   <array>
     <string>/usr/bin/python3</string>
-    <string>/Users/YOU/fortiguard_login.py</string>
-    <string>-u</string>  <string>YOUR_USERNAME</string>
-    <string>-p</string>  <string>YOUR_PASSWORD</string>
-    <!-- Optional: add SSH tunnel flags -->
-    <!-- <string>--ssh-user</string>  <string>ubuntu</string>   -->
-    <!-- <string>--ssh-host</string>  <string>1.2.3.4</string>  -->
-    <!-- <string>--ssh-identity</string>  <string>/Users/YOU/.ssh/id_rsa</string>  -->
+    <string>/Users/YOUR_NAME/fortiguard_login.py</string>
+    <string>-u</string> <string>YOUR_USERNAME</string>
+    <string>-p</string> <string>YOUR_PASSWORD</string>
   </array>
-
-  <key>RunAtLoad</key>   <true/>
-  <key>KeepAlive</key>   <true/>
-
-  <key>StandardOutPath</key>  <string>/tmp/fortiguard.log</string>
-  <key>StandardErrorPath</key><string>/tmp/fortiguard.log</string>
+  <key>RunAtLoad</key> <true/>
+  <key>KeepAlive</key> <true/>
+  <key>StandardOutPath</key> <string>/tmp/fortiguard.log</string>
+  <key>StandardErrorPath</key> <string>/tmp/fortiguard.log</string>
 </dict>
 </plist>
 ```
 
+3. **Save the file** as `com.user.fortiguard-autologin.plist` inside the folder:
+   `~/Library/LaunchAgents/`
+   *(Press Cmd+Shift+G in the save dialog and paste that path if you can't find it)*
+
+4. **Activate it** by running this in Terminal:
 ```bash
-# Load the agent (starts now and on every future login)
 launchctl load ~/Library/LaunchAgents/com.user.fortiguard-autologin.plist
+```
 
-# View logs
+That's it. It will now start itself every time you log into your Mac.
+
+To check if it's running:
+```bash
 tail -f /tmp/fortiguard.log
+```
+You should see messages like `[INFO] Watching for FortiGuard portal`.
 
-# Stop
+To stop it:
+```bash
 launchctl unload ~/Library/LaunchAgents/com.user.fortiguard-autologin.plist
 ```
 
-> **Tip — avoid putting your password in the plist:**
-> Store it in a file readable only by you:
-> ```bash
-> echo 'YOUR_PASSWORD' > ~/.fortiguard_pass && chmod 600 ~/.fortiguard_pass
-> ```
-> Then replace the `<string>YOUR_PASSWORD</string>` line with a shell wrapper:
-> ```xml
-> <key>ProgramArguments</key>
-> <array>
->   <string>/bin/bash</string>
->   <string>-c</string>
->   <string>/usr/bin/python3 /Users/YOU/fortiguard_login.py -u USER -p "$(cat ~/.fortiguard_pass)"</string>
-> </array>
-> ```
+---
+
+### On your Android phone (no Mac needed)
+
+Termux is a free app that lets your Android phone run the same script as your Mac.
+
+**Step 1 — Install Termux**
+
+Install it from **F-Droid** (not the Play Store — the Play Store version is outdated):
+- Go to f-droid.org/packages/com.termux on your phone's browser
+- Download and install the APK
+
+**Step 2 — Set up and run**
+
+Open Termux and paste these three commands one at a time:
+```bash
+pkg update && pkg install python git
+```
+```bash
+git clone https://github.com/YOUR_USERNAME/W.git && cd W
+```
+```bash
+python fortiguard_login.py -u YOUR_COLLEGE_EMAIL
+```
+
+**Step 3 — Keep it alive when you lock your screen**
+
+By default Android pauses Termux when you lock your phone. Fix this:
+- Run this command first: `termux-wake-lock`
+- Then start the script as normal
+
+Or: swipe down on the Termux notification → tap and hold → turn off "Pause when screen off".
 
 ---
 
-## Android — standalone (no Mac required)
+## Section B — Unblock websites
 
-Both auto-login and firewall bypass can run entirely on Android with no Mac involved.
+FortiGuard blocks certain websites by category (social media, research sites, etc.). To get around this, you need to route your traffic through a server outside the college network — like sending your internet requests through a friend's house instead of the college gate.
 
-### Auto-login + keepalive on Android (Termux)
+There are two ways:
 
-[Termux](https://f-droid.org/packages/com.termux/) is a free Linux terminal for Android that can run our existing Python script directly.
+| | Option 1: VPN (WireGuard) | Option 2: Encrypted DNS |
+|---|---|---|
+| **Bypasses** | Everything | DNS-based blocks only (~60-70%) |
+| **Needs a server?** | Yes (free) | No |
+| **Works on Android?** | Yes, standalone | Yes, built into Android |
+| **Setup time** | ~15 min | ~5 min |
 
+**Not sure which to pick?** Start with Option 2 (no server needed). If sites are still blocked, do Option 1.
+
+---
+
+### Option 1 — VPN via WireGuard (bypasses everything)
+
+WireGuard is a VPN app. When it's on, all your internet traffic goes through your server first — FortiGuard sees encrypted gibberish and can't block anything.
+
+#### First: Get a free server
+
+A server here means a computer in a data centre that's always on and has a normal internet connection. Oracle gives you one free forever — not a trial, actually free.
+
+1. Go to **cloud.oracle.com/free** and sign up with a personal email
+2. Once logged in, go to **Compute → Instances → Create Instance**
+3. Change these settings:
+   - **Image**: click "Change Image" → pick **Ubuntu 22.04**
+   - **Shape**: click "Change Shape" → pick **VM.Standard.A1.Flex** → set 1 OCPU and 6 GB RAM
+   - **SSH keys**: click "Upload public key file" → upload the file at `~/.ssh/id_rsa.pub` on your Mac
+     *(If that file doesn't exist, run `ssh-keygen` in Terminal first and press Enter through all prompts)*
+4. Click **Create**. Wait about 2 minutes.
+5. Copy the **Public IP address** shown on the instance page.
+6. Test the connection from your Mac:
+   ```bash
+   ssh ubuntu@YOUR_SERVER_IP
+   ```
+   If it connects, type `exit`. You're ready.
+
+#### Set up WireGuard on your server
+
+From your Mac, run this one command (it does everything automatically):
 ```bash
-# 1. Install Termux from F-Droid (NOT Play Store — the Play Store version is outdated)
-#    https://f-droid.org/packages/com.termux/
-
-# 2. Inside Termux, install Python
-pkg update && pkg install python git
-
-# 3. Get the script
-git clone https://github.com/YOUR_USERNAME/W.git
-cd W
-
-# 4. Run it (same as on Mac)
-python fortiguard_login.py -u your_username@college.edu
+ssh ubuntu@YOUR_SERVER_IP "bash -s" < setup_wireguard_vps.sh
 ```
 
-To keep it running when you lock your phone:
-- Swipe down → long-press the Termux notification → turn off "Pause execution when screen off"
-- Or run `termux-wake-lock` inside Termux before starting the script
+This installs WireGuard on your server and generates a **QR code** in your terminal.
 
-### Firewall bypass on Android (WireGuard VPN)
+> **Oracle users — one extra step:** Oracle's firewall also needs to be opened manually.
+> Go to OCI Console → **Networking → Virtual Cloud Networks → your VCN → Security Lists → Default Security List → Add Ingress Rule**
+> Set: Source `0.0.0.0/0`, Protocol `UDP`, Port `51820`
+> The script will remind you of this when it finishes.
 
-WireGuard is a lightweight VPN that runs as an Android app. Once set up, all your Android traffic exits through your VPS — FortiGuard can't see or block it.
+#### Connect your Android phone
 
-**Step 1 — Run the setup script on your VPS** (one-time, ~2 minutes):
-
-```bash
-# From your Mac, pipe the script directly into SSH:
-ssh ubuntu@<your-vps-ip> "bash -s" < setup_wireguard_vps.sh
-```
-
-This installs WireGuard on the VPS, configures it as a VPN server, and prints a **QR code** in your terminal.
-
-> **Oracle Cloud users:** After running the script, you also need to open port 51820/UDP in the OCI Console:
-> Networking → Virtual Cloud Networks → your VCN → Security Lists → Default Security List
-> → Add Ingress Rule → Source: `0.0.0.0/0`, Protocol: UDP, Port: `51820`
-> The script will remind you of this.
-
-**Step 2 — Connect Android**:
-
-1. Install **WireGuard** from the Play Store (free, open source by the WireGuard project)
-2. Tap **+** → **Scan from QR code**
-3. Scan the QR code printed by the setup script
+1. Install **WireGuard** from the Play Store (free, made by the WireGuard project)
+2. Open it → tap **+** → **Scan from QR code**
+3. Scan the QR code that appeared in your terminal
 4. Toggle the tunnel **ON**
 
-That's it. All Android traffic now bypasses FortiGuard. Toggle it off when you leave campus.
+All your Android traffic now bypasses FortiGuard. Toggle it off when you leave campus.
 
-**To re-display the QR code later** (if you missed it):
+> If you missed the QR code, show it again with:
+> ```bash
+> ssh ubuntu@YOUR_SERVER_IP
+> qrencode -t ansiutf8 < ~/android-wireguard.conf
+> ```
+
+#### Connect your Mac browser (via the script)
+
+Run the script with your server details:
 ```bash
-ssh ubuntu@<your-vps-ip>
-qrencode -t ansiutf8 < ~/android-wireguard.conf
+python3 fortiguard_login.py -u YOUR_COLLEGE_EMAIL \
+  --ssh-host YOUR_SERVER_IP \
+  --ssh-user ubuntu
+```
+
+This handles the portal login AND creates a private tunnel to your server. Now tell your browser to use it:
+
+**Firefox** (easiest, no admin password needed):
+1. Settings → scroll to the bottom → **Network Settings** → **Settings…**
+2. Select **Manual proxy configuration**
+3. Fill in: SOCKS Host = `127.0.0.1`, Port = `1080`, type = **SOCKS v5**
+4. **Check** "Proxy DNS when using SOCKS v5"
+5. Click OK
+
+**Everywhere on your Mac** (requires admin password):
+```bash
+sudo networksetup -setsocksfirewallproxy Wi-Fi 127.0.0.1 1080
+sudo networksetup -setsocksfirewallproxystate Wi-Fi on
+```
+Turn it off when you leave campus:
+```bash
+sudo networksetup -setsocksfirewallproxystate Wi-Fi off
+```
+
+#### Use Mac + Android at the same time
+
+Add `--share-proxy` to the script command:
+```bash
+python3 fortiguard_login.py -u YOUR_COLLEGE_EMAIL \
+  --ssh-host YOUR_SERVER_IP --ssh-user ubuntu \
+  --share-proxy
+```
+
+The script will print your Mac's local IP address and exact steps for Android. On Android:
+1. Settings → Wi-Fi → **tap and hold** your college network → **Modify network**
+2. Expand **Advanced options**
+3. Proxy → **Manual**
+4. Enter the hostname and port the script printed
+5. Save
+
+---
+
+### Option 2 — Encrypted DNS (no server, partial bypass)
+
+Your device looks up website addresses using DNS — like checking a phone book to find a website's location. FortiGuard controls that phone book and removes entries for blocked sites.
+
+Encrypted DNS (called DNS-over-HTTPS) uses a different, encrypted phone book that FortiGuard can't tamper with. It bypasses about 60-70% of blocks. Sites that are blocked in other ways won't be unlocked by this alone.
+
+**On Android** — no app needed, it's built in:
+1. Settings → **Network & internet → Advanced → Private DNS**
+2. Select **Private DNS provider hostname**
+3. Type: `1dot1dot1dot1.cloudflare-dns.com`
+4. Save
+
+Done. This stays active on any WiFi, not just college WiFi.
+
+**On Mac** — install cloudflared first:
+```bash
+brew install cloudflare/cloudflare/cloudflared
+```
+
+Then run the script with `--doh`:
+```bash
+python3 fortiguard_login.py -u YOUR_COLLEGE_EMAIL --doh
+```
+
+One-time command to point your Mac at the local encrypted DNS (run while on college WiFi):
+```bash
+sudo networksetup -setdnsservers Wi-Fi 127.0.0.1
+```
+
+Revert when you leave campus:
+```bash
+sudo networksetup -setdnsservers Wi-Fi empty
 ```
 
 ---
 
-## All flags
+## Is it working?
 
+**Auto-login working?**
+Just wait for the login page to appear normally. It should disappear and reconnect within a few seconds. Or check the log:
+```bash
+tail -f /tmp/fortiguard.log
 ```
-Authentication:
-  -u, --username      Portal username (required)
-  -p, --password      Portal password (prompted if omitted)
+Look for a line saying `Login successful`.
 
-Behaviour:
-  -i, --interval SEC  Seconds between connectivity checks (default: 60)
-  --once              Login once and exit
-  --no-keepalive      Disable keepalive pings (for debugging)
-  --probe-url URL     URL used to detect captive portal
-  -v, --verbose       Verbose / debug output
+**VPN tunnel working?**
+Open this website in your browser: **https://ipinfo.io**
+- If it shows your server's IP (not a college IP) — it's working
+- Or run in Terminal: `curl --socks5 127.0.0.1:1080 https://ipinfo.io`
 
-SSH SOCKS5 tunnel:
-  --ssh-host HOST     SSH server hostname or IP
-  --ssh-user USER     SSH username
-  --ssh-port PORT     SSH port (default: 22)
-  --ssh-identity FILE Path to SSH private key
-  --socks-port PORT   Local SOCKS5 port (default: 1080)
-  --share-proxy       Bind proxy on all interfaces so Android/other devices can use it
-
-DNS-over-HTTPS:
-  --doh               Start cloudflared proxy-dns
-  --doh-port PORT     Local DoH proxy port (default: 5053)
-```
+**WireGuard on Android working?**
+Open **https://ipinfo.io** in your Android browser.
+The IP shown should match your server's IP, not your college's.
 
 ---
 
-## Troubleshooting
+## Something went wrong?
 
-| Symptom | Fix |
+| What's happening | What to do |
 |---|---|
-| "Login failed" repeatedly | Run with `-v`. Check the portal URL is reachable. |
-| Login succeeds but keepalive not found | Run with `-v` — the script will log the portal response. Some older firmware doesn't embed the keepalive URL; the session will auto-renew on expiry instead. |
-| SSH tunnel starts but browsing is slow | Try `--socks-port 1081` in case 1080 is blocked by the college firewall. Port 443 usually works: `--ssh-port 443` (must configure sshd on VPS to also listen on 443). |
-| cloudflared starts but blocked sites still don't load | The block is not DNS-based. You need the SSH tunnel (Option A). |
-| curl/git not going through tunnel | Set `ALL_PROXY=socks5h://127.0.0.1:1080` in your shell profile. |
+| "Login failed" keeps appearing | Double-check your username and password. Run with `-v` at the end of the command to see more detail. |
+| Login works but the session still expires | The script couldn't find the keepalive signal on your college's portal. It will re-login when it expires — you just won't get the full 4 hours. Run with `-v` to investigate. |
+| VPN tunnel is working but some sites are still blocked | A small number of blocks don't go through the tunnel if the app bypasses the proxy. Use the system-wide proxy setting, not just Firefox. |
+| SSH tunnel starts but internet is slow | Your college might be throttling port 22. Try adding `--ssh-port 443` to the command (you'll also need to configure your server to accept SSH on port 443 — see README-alt.md). |
+| Encrypted DNS option isn't unblocking sites | The block isn't DNS-based. You need Option 1 (WireGuard/SSH tunnel). |
+| Android proxy isn't working | Make sure both your Mac and Android are on the **same WiFi network**. |
+
+---
+
+## All options (cheat sheet)
+
+```
+-u, --username      Your college login email (required)
+-p, --password      Your password (leave this out — it will ask you securely)
+-i, --interval      How often to check the connection, in seconds (default: 60)
+--once              Login once and quit instead of watching continuously
+--no-keepalive      Don't send keepalive pings (for testing only)
+-v, --verbose       Show detailed logs of what the script is doing
+
+-- Unblock websites via server tunnel --
+--ssh-host          Your server's IP address
+--ssh-user          Your server's username (usually: ubuntu)
+--ssh-port          Your server's SSH port (default: 22, try 443 if slow)
+--ssh-identity      Path to your SSH key file (default: ~/.ssh/id_rsa)
+--socks-port        Local tunnel port (default: 1080, change if blocked)
+--share-proxy       Let other devices on the same WiFi use the tunnel too
+
+-- Encrypted DNS --
+--doh               Turn on encrypted DNS via cloudflared
+--doh-port          Port for the local DNS proxy (default: 5053)
+```
