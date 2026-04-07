@@ -39,8 +39,16 @@ chrome.tabs.onUpdated.addListener((tabId, info) => {
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg.action === 'setSetting') {
     chrome.storage.local.set({ [msg.key]: msg.value }, () => {
+      // Send only the changed setting — avoids overwriting other settings
+      // with stale values from a race condition in storage reads
       chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
-        if (tab) pushToTab(tab.id);
+        if (tab) {
+          chrome.tabs.sendMessage(tab.id, {
+            action: 'applySetting',
+            key: msg.key,
+            value: msg.value,
+          }).catch(() => {});
+        }
       });
     });
     sendResponse({ ok: true });

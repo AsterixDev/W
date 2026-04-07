@@ -8,7 +8,6 @@
   const DARK_STYLE_ID = '__se_dark';
 
   function luminance(r, g, b) {
-    // Relative luminance per WCAG formula
     const toLinear = (c) => {
       const s = c / 255;
       return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
@@ -21,15 +20,15 @@
     return m ? [+m[1], +m[2], +m[3]] : null;
   }
 
-  function pageIsLight() {
+  function pageIsAlreadyDark() {
     const bg = getComputedStyle(document.documentElement).backgroundColor;
     const rgb = parseRgb(bg);
-    if (!rgb) return true; // assume light if we can't tell
-    return luminance(...rgb) > 0.5;
+    if (!rgb) return false;
+    return luminance(...rgb) < 0.3;
   }
 
   function siteHasNativeDark() {
-    // Check if any stylesheet contains a prefers-color-scheme: dark rule
+    // Only reliable after stylesheets are loaded
     try {
       for (const sheet of document.styleSheets) {
         for (const rule of sheet.cssRules || []) {
@@ -41,32 +40,42 @@
   }
 
   function applyDarkMode(enabled) {
-    // Remove any existing dark style we injected
     document.getElementById(DARK_STYLE_ID)?.remove();
     document.documentElement.style.removeProperty('color-scheme');
 
     if (!enabled) return;
 
-    if (siteHasNativeDark()) {
-      // Let the site's own dark palette handle it — zero artifacts
-      document.documentElement.style.colorScheme = 'dark';
+    // Run detection after styles are loaded so we get accurate results
+    const run = () => {
+      // If the page is already dark, don't touch it
+      if (pageIsAlreadyDark()) return;
+
+      if (siteHasNativeDark()) {
+        // Site has its own dark mode — just tell it to use dark
+        document.documentElement.style.colorScheme = 'dark';
+      } else {
+        // No native dark mode — apply invert filter
+        const style = document.createElement('style');
+        style.id = DARK_STYLE_ID;
+        style.textContent = `
+          html {
+            filter: invert(0.9) hue-rotate(180deg) !important;
+            background: #111 !important;
+          }
+          img, video, canvas, svg, picture, iframe,
+          [style*="background-image"] {
+            filter: invert(1) hue-rotate(180deg) !important;
+          }
+        `;
+        const target = document.head || document.documentElement;
+        target.prepend(style);
+      }
+    };
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', run, { once: true });
     } else {
-      // Invert + hue-rotate the page; un-invert images/video so they look right
-      const style = document.createElement('style');
-      style.id = DARK_STYLE_ID;
-      style.textContent = `
-        html {
-          filter: invert(0.9) hue-rotate(180deg) !important;
-          background: #111 !important;
-        }
-        img, video, canvas, svg, picture, iframe,
-        [style*="background-image"] {
-          filter: invert(1) hue-rotate(180deg) !important;
-        }
-      `;
-      // Insert as early as possible
-      const target = document.head || document.documentElement;
-      target.prepend(style);
+      run();
     }
   }
 
@@ -87,8 +96,6 @@
   }
 
   // ── Volume boost relay ──────────────────────────────────────────────────────
-  // inject.js runs in page context and holds the AudioContext.
-  // We communicate with it via CustomEvents.
 
   let injected = false;
 
@@ -106,7 +113,13 @@
     window.dispatchEvent(new CustomEvent('se-set-gain', { detail: gain }));
   }
 
-  // ── Apply all settings at once ──────────────────────────────────────────────
+  // ── Apply individual setting (avoids overwriting unrelated settings) ─────────
+
+  function applySetting(key, value) {
+    if (key === 'darkMode')     applyDarkMode(value);
+    if (key === 'toolbarColor') applyToolbarColor(value);
+    if (key === 'volume')       applyVolume(value);
+  }
 
   function applyAll(settings) {
     applyDarkMode(settings.darkMode ?? false);
@@ -117,13 +130,15 @@
   // ── Listen for messages from background.js ──────────────────────────────────
 
   chrome.runtime.onMessage.addListener((msg) => {
-    if (msg.action === 'applyAll') applyAll(msg.settings);
+    if (msg.action === 'applyAll')     applyAll(msg.settings);
+    if (msg.action === 'applySetting') applySetting(msg.key, msg.value);
   });
 
-  // ── Bootstrap: fetch current settings and apply immediately ────────────────
+  // ── Bootstrap ────────────────────────────────────────────────────────────────
 
   chrome.runtime.sendMessage({ action: 'getSettings' }, (settings) => {
     if (settings) applyAll(settings);
   });
 
 })();
+
