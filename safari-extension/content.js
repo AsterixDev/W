@@ -22,17 +22,14 @@
   function pageIsAlreadyDark() {
     const bg = getComputedStyle(document.documentElement).backgroundColor;
     const rgb = parseRgb(bg);
-    if (!rgb) return false;
-    return luminance(...rgb) < 0.3;
+    return rgb ? luminance(...rgb) < 0.3 : false;
   }
 
   function siteHasNativeDark() {
     try {
-      for (const sheet of document.styleSheets) {
-        for (const rule of sheet.cssRules || []) {
+      for (const sheet of document.styleSheets)
+        for (const rule of sheet.cssRules || [])
           if (rule.media?.mediaText?.includes('prefers-color-scheme')) return true;
-        }
-      }
     } catch (_) {}
     return false;
   }
@@ -44,41 +41,59 @@
     document.documentElement.style.removeProperty('color-scheme');
     if (!enabled) return;
 
-    const run = () => {
-      if (pageIsAlreadyDark()) return; // site is already dark — leave it alone
+    if (siteHasNativeDark()) {
+      // Site has its own dark palette — just switch it
+      document.documentElement.style.colorScheme = 'dark';
+      return;
+    }
 
-      if (siteHasNativeDark()) {
-        document.documentElement.style.colorScheme = 'dark';
-      } else {
-        const style = document.createElement('style');
-        style.id = DARK_STYLE_ID;
-        style.textContent = `
-          html { filter: invert(0.9) hue-rotate(180deg) !important; background: #111 !important; }
-          img, video, canvas, svg, picture, iframe, [style*="background-image"] {
-            filter: invert(1) hue-rotate(180deg) !important;
-          }`;
-        (document.head || document.documentElement).prepend(style);
+    // Apply invert immediately so there's no flash of white
+    const style = document.createElement('style');
+    style.id = DARK_STYLE_ID;
+    style.textContent = `
+      html { filter: invert(0.9) hue-rotate(180deg) !important; background: #111 !important; }
+      img, video, canvas, svg, picture, iframe, [style*="background-image"] {
+        filter: invert(1) hue-rotate(180deg) !important;
+      }`;
+    (document.head || document.documentElement).prepend(style);
+
+    // After page loads, remove it if the page was already dark
+    const undoIfDark = () => {
+      if (pageIsAlreadyDark()) {
+        document.getElementById(DARK_STYLE_ID)?.remove();
+        document.documentElement.style.removeProperty('color-scheme');
       }
     };
-
     if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', run, { once: true });
+      document.addEventListener('DOMContentLoaded', undoIfDark, { once: true });
     } else {
-      run();
+      undoIfDark();
     }
   }
 
   // ── Toolbar colour ───────────────────────────────────────────────────────────
+  // document.head may not exist at document_start — wait for it.
 
   function applyToolbarColor(hex) {
-    let meta = document.querySelector('meta[name="theme-color"]');
-    if (!hex) { meta?.remove(); return; }
-    if (!meta) {
-      meta = document.createElement('meta');
-      meta.name = 'theme-color';
-      document.head?.appendChild(meta);
+    const doInsert = () => {
+      let meta = document.querySelector('meta[name="theme-color"]');
+      if (!hex) { meta?.remove(); return; }
+      if (!meta) {
+        meta = document.createElement('meta');
+        meta.name = 'theme-color';
+        document.head.appendChild(meta);
+      }
+      meta.content = hex;
+    };
+
+    if (document.head) {
+      doInsert();
+    } else {
+      const obs = new MutationObserver(() => {
+        if (document.head) { obs.disconnect(); doInsert(); }
+      });
+      obs.observe(document.documentElement, { childList: true });
     }
-    meta.content = hex;
   }
 
   // ── Volume boost ─────────────────────────────────────────────────────────────
@@ -112,19 +127,15 @@
   }
 
   chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
-    if (msg.action === 'applyAll')     applyAll(msg.settings);
-    if (msg.action === 'applySetting') applySetting(msg.key, msg.value);
+    if (msg.action === 'applyAll')     { applyAll(msg.settings); }
+    if (msg.action === 'applySetting') { applySetting(msg.key, msg.value); }
     if (msg.action === 'getPageState') {
-      // Called by popup to check if page is already dark
-      const check = () => {
-        sendResponse({ alreadyDark: pageIsAlreadyDark() });
-      };
-      if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', check, { once: true });
-      } else {
-        check();
-      }
-      return true; // async
+      const respond = () => sendResponse({ alreadyDark: pageIsAlreadyDark() });
+      if (document.readyState === 'loading')
+        document.addEventListener('DOMContentLoaded', respond, { once: true });
+      else
+        respond();
+      return true;
     }
   });
 

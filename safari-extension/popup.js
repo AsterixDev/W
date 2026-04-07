@@ -27,14 +27,14 @@
     chrome.runtime.sendMessage({ action: 'setSetting', key, value, ...extra });
   }
 
-  // ── Dark mode ─────────────────────────────────────────────────────────────────
-
-  function setDarkToggleDisabled(disabled, hint) {
+  function setDarkDisabled(disabled, hint) {
     darkToggle.disabled = disabled;
     darkRow.classList.toggle('disabled', disabled);
     darkHint.textContent = hint || '';
     darkHint.style.display = hint ? 'block' : 'none';
   }
+
+  // ── Dark mode ─────────────────────────────────────────────────────────────────
 
   darkToggle.addEventListener('change', () => {
     if (!currentHost) return;
@@ -106,15 +106,18 @@
       swatchBtns.forEach((b) => b.classList.toggle('active', b.dataset.color === hex));
     }
 
-    // Dark mode — check if page is already dark first
+    // Dark mode: set from storage immediately, then refine with page state
+    darkToggle.checked = !!settings.darkMode;
+    setDarkDisabled(false);
+
     chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
+      if (!tab) return;
       chrome.tabs.sendMessage(tab.id, { action: 'getPageState' }, (state) => {
-        if (state?.alreadyDark) {
+        // Ignore errors (content script not ready, chrome-internal pages, etc.)
+        if (chrome.runtime.lastError || !state) return;
+        if (state.alreadyDark) {
           darkToggle.checked = false;
-          setDarkToggleDisabled(true, 'Site is already dark');
-        } else {
-          darkToggle.checked = !!settings.darkMode;
-          setDarkToggleDisabled(false);
+          setDarkDisabled(true, 'Site is already dark');
         }
       });
     });

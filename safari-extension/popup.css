@@ -1,35 +1,23 @@
 /* ── Reset & base ────────────────────────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
+/* Always dark — no system preference check */
 :root {
-  --bg:            rgba(246, 246, 246, 0.92);
-  --bg-section:    rgba(255, 255, 255, 0.75);
-  --fg:            #1c1c1e;
-  --fg-secondary:  #6c6c70;
+  --bg:            rgba(20, 20, 22, 0.97);
+  --bg-section:    rgba(38, 38, 42, 0.95);
+  --fg:            #f2f2f7;
+  --fg-secondary:  #8e8e93;
   --fg-warning:    #ff9f0a;
-  --divider:       rgba(0, 0, 0, 0.10);
+  --divider:       rgba(255, 255, 255, 0.10);
   --accent:        #5e5ce6;
   --accent-hover:  #4b49c8;
-  --track:         rgba(0, 0, 0, 0.12);
-  --thumb:         #ffffff;
-  --shadow:        0 1px 3px rgba(0,0,0,0.14);
+  --track:         rgba(255, 255, 255, 0.14);
+  --thumb:         #e0e0e6;
+  --shadow:        0 1px 4px rgba(0,0,0,0.50);
   --radius:        12px;
   --radius-sm:     8px;
   --swatch-size:   26px;
   --font:          -apple-system, "SF Pro Text", system-ui, sans-serif;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg:            rgba(28, 28, 30, 0.93);
-    --bg-section:    rgba(44, 44, 46, 0.80);
-    --fg:            #f2f2f7;
-    --fg-secondary:  #8e8e93;
-    --divider:       rgba(255, 255, 255, 0.10);
-    --track:         rgba(255, 255, 255, 0.16);
-    --thumb:         #e0e0e6;
-    --shadow:        0 1px 3px rgba(0,0,0,0.40);
-  }
 }
 
 body {
