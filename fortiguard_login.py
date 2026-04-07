@@ -77,14 +77,14 @@ def _no_redirect_opener() -> urllib.request.OpenerDirector:
     )
 
 
-def detect_portal() -> tuple[bool, str | None]:
+def detect_portal(probe_url: str = PROBE_URL) -> tuple[bool, str | None]:
     """
     Returns (needs_login, portal_url).
     needs_login is True when a captive portal redirect was detected.
     """
     opener = _no_redirect_opener()
     try:
-        resp = opener.open(PROBE_URL, timeout=REQUEST_TIMEOUT)
+        resp = opener.open(probe_url, timeout=REQUEST_TIMEOUT)
         body = resp.read(512).decode("utf-8", errors="replace")
         if PROBE_EXPECT in body:
             return False, None
@@ -462,6 +462,7 @@ def watch(
     interval: int = DEFAULT_INTERVAL,
     no_keepalive: bool = False,
     bypass_threads: list[threading.Thread] | None = None,
+    probe_url: str = PROBE_URL,
 ) -> None:
     """
     Continuously monitor connectivity and re-login whenever the captive
@@ -485,7 +486,7 @@ def watch(
     log.info("Watching for FortiGuard portal (check every %ds) …", interval)
 
     while True:
-        needs_login, portal_url = detect_portal()
+        needs_login, portal_url = detect_portal(probe_url)
 
         if needs_login:
             log.warning("Captive portal detected — logging in …")
@@ -622,8 +623,7 @@ Examples:
     if args.verbose:
         log.setLevel(logging.DEBUG)
 
-    global PROBE_URL
-    PROBE_URL = args.probe_url
+    probe_url = args.probe_url
 
     if args.password is None:
         import getpass
@@ -672,7 +672,7 @@ Examples:
     # ── One-shot mode ─────────────────────────────────────────────────────────
 
     if args.once:
-        needs_login, portal_url = detect_portal()
+        needs_login, portal_url = detect_portal(probe_url)
         if not needs_login:
             log.info("Already connected — nothing to do.")
             sys.exit(0)
@@ -694,6 +694,7 @@ Examples:
         interval=args.interval,
         no_keepalive=args.no_keepalive,
         bypass_threads=bypass_threads,
+        probe_url=probe_url,
     )
 
 
