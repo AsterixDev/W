@@ -309,3 +309,18 @@ input[type="range"].volume-slider {
     var(--track)  100%
   );
 }
+
+/* ── Disabled dark mode row ──────────────────────────────────────────────── */
+
+.row.disabled {
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+.dark-hint {
+  font-size:    11px;
+  color:        var(--fg-secondary);
+  margin-top:   4px;
+  text-align:   center;
+  font-style:   italic;
+}

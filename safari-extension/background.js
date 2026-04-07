@@ -1,10 +1,16 @@
 // ── Defaults ─────────────────────────────────────────────────────────────────
 
 const DEFAULTS = {
-  darkMode: false,
-  toolbarColor: null,   // null = don't touch the toolbar
-  volume: 1.0,          // 1.0 = 100%, 10.0 = 1000%
+  darkModeHosts: {},   // { "example.com": true } — per-domain dark mode
+  toolbarColor: null,
+  volume: 1.0,
 };
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function hostname(url) {
+  try { return new URL(url).hostname; } catch { return null; }
+}
 
 // ── Install → write defaults ──────────────────────────────────────────────────
 
@@ -20,42 +26,64 @@ chrome.runtime.onInstalled.addListener(() => {
 
 // ── Push settings to a tab's content script ──────────────────────────────────
 
-function pushToTab(tabId) {
-  chrome.storage.local.get(Object.keys(DEFAULTS), (settings) => {
-    chrome.tabs.sendMessage(tabId, { action: 'applyAll', settings })
-      .catch(() => {}); // tab may not have the content script yet — ignore
+function pushToTab(tabId, tabUrl) {
+  chrome.storage.local.get(Object.keys(DEFAULTS), (s) => {
+    const host = hostname(tabUrl);
+    const darkMode = host ? !!(s.darkModeHosts?.[host]) : false;
+    chrome.tabs.sendMessage(tabId, {
+      action: 'applyAll',
+      settings: { darkMode, toolbarColor: s.toolbarColor, volume: s.volume },
+    }).catch(() => {});
   });
 }
 
-// Re-push whenever the user navigates to a new page (content script reloads)
-chrome.tabs.onUpdated.addListener((tabId, info) => {
-  if (info.status === 'loading') pushToTab(tabId);
+chrome.tabs.onUpdated.addListener((tabId, info, tab) => {
+  if (info.status === 'loading') pushToTab(tabId, tab.url);
 });
 
-// ── Message relay from popup ──────────────────────────────────────────────────
-// The popup sends { action, key, value } to update a single setting and
-// immediately apply it to the active tab.
+// ── Message relay ─────────────────────────────────────────────────────────────
 
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+
   if (msg.action === 'setSetting') {
-    chrome.storage.local.set({ [msg.key]: msg.value }, () => {
-      // Send only the changed setting — avoids overwriting other settings
-      // with stale values from a race condition in storage reads
-      chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
-        if (tab) {
-          chrome.tabs.sendMessage(tab.id, {
-            action: 'applySetting',
-            key: msg.key,
-            value: msg.value,
-          }).catch(() => {});
-        }
+    if (msg.key === 'darkMode') {
+      // Store per-domain
+      chrome.storage.local.get('darkModeHosts', (s) => {
+        const hosts = s.darkModeHosts || {};
+        if (msg.value) hosts[msg.host] = true;
+        else delete hosts[msg.host];
+        chrome.storage.local.set({ darkModeHosts: hosts }, () => {
+          chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
+            if (tab) chrome.tabs.sendMessage(tab.id, {
+              action: 'applySetting', key: 'darkMode', value: msg.value,
+            }).catch(() => {});
+          });
+        });
       });
-    });
+    } else {
+      chrome.storage.local.set({ [msg.key]: msg.value }, () => {
+        chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
+          if (tab) chrome.tabs.sendMessage(tab.id, {
+            action: 'applySetting', key: msg.key, value: msg.value,
+          }).catch(() => {});
+        });
+      });
+    }
     sendResponse({ ok: true });
   }
 
   if (msg.action === 'getSettings') {
-    chrome.storage.local.get(Object.keys(DEFAULTS), sendResponse);
-    return true; // keep channel open for async response
+    chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
+      const host = hostname(tab?.url || '');
+      chrome.storage.local.get(Object.keys(DEFAULTS), (s) => {
+        sendResponse({
+          darkMode: host ? !!(s.darkModeHosts?.[host]) : false,
+          toolbarColor: s.toolbarColor,
+          volume: s.volume,
+          host,
+        });
+      });
+    });
+    return true;
   }
 });
