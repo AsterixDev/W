@@ -291,10 +291,26 @@ def _probe_success() -> bool:
 
 # ── SSH SOCKS5 tunnel ─────────────────────────────────────────────────────────
 
+def _get_local_ip() -> str:
+    """Return this machine's LAN IP (the address other devices on WiFi see)."""
+    import socket
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        return s.getsockname()[0]
+    except Exception:
+        return "127.0.0.1"
+    finally:
+        s.close()
+
+
 class SshTunnelThread(threading.Thread):
     """
     Maintains a persistent SSH SOCKS5 tunnel.
     Restarts automatically on connection drop (acts as a lightweight autossh).
+
+    When bind_host="0.0.0.0" the proxy is reachable from other devices on the
+    same network (e.g. an Android phone configured to use this machine as proxy).
     """
     def __init__(
         self,
@@ -303,6 +319,7 @@ class SshTunnelThread(threading.Thread):
         port: int = 22,
         local_port: int = 1080,
         identity_file: str | None = None,
+        bind_host: str = "127.0.0.1",
     ) -> None:
         super().__init__(daemon=True, name="ssh-tunnel")
         self.user = user
@@ -310,6 +327,7 @@ class SshTunnelThread(threading.Thread):
         self.port = port
         self.local_port = local_port
         self.identity_file = identity_file
+        self.bind_host = bind_host
         self._stop = threading.Event()
         self._proc: subprocess.Popen | None = None
 
@@ -319,9 +337,12 @@ class SshTunnelThread(threading.Thread):
             self._proc.terminate()
 
     def _build_cmd(self) -> list[str]:
+        # "bind_host:port" tells SSH which interface to listen on.
+        # 127.0.0.1 → Mac only; 0.0.0.0 → whole LAN (needed for Android).
+        bind_spec = f"{self.bind_host}:{self.local_port}"
         cmd = [
             "ssh",
-            "-D", str(self.local_port),
+            "-D", bind_spec,
             "-N",                              # no remote command
             "-o", "ExitOnForwardFailure=yes",
             "-o", "ServerAliveInterval=30",
@@ -337,8 +358,8 @@ class SshTunnelThread(threading.Thread):
     def run(self) -> None:
         while not self._stop.is_set():
             log.info(
-                "Starting SSH SOCKS5 tunnel → %s@%s:%d (local port %d)",
-                self.user, self.host, self.port, self.local_port,
+                "Starting SSH SOCKS5 tunnel → %s@%s:%d (listening on %s:%d)",
+                self.user, self.host, self.port, self.bind_host, self.local_port,
             )
             try:
                 self._proc = subprocess.Popen(
@@ -522,6 +543,9 @@ Examples:
   # With SSH SOCKS5 tunnel to bypass FortiGuard web filtering
   %(prog)s -u student@college.edu --ssh-user ubuntu --ssh-host 1.2.3.4
 
+  # Share the proxy with your Android phone too
+  %(prog)s -u student@college.edu --ssh-user ubuntu --ssh-host 1.2.3.4 --share-proxy
+
   # With SSH tunnel using a specific key file
   %(prog)s -u student@college.edu --ssh-user ubuntu --ssh-host 1.2.3.4 \\
            --ssh-identity ~/.ssh/my_vps_key
@@ -570,6 +594,14 @@ Examples:
         "--socks-port", type=int, default=1080, metavar="PORT",
         help="Local SOCKS5 port (default: 1080)",
     )
+    ssh.add_argument(
+        "--share-proxy", action="store_true",
+        help=(
+            "Bind the SOCKS5 proxy on all interfaces (0.0.0.0) so other devices "
+            "on the same WiFi (e.g. your Android phone) can use it. "
+            "Point Android's WiFi proxy to this machine's IP and --socks-port."
+        ),
+    )
 
     # DoH
     doh = parser.add_argument_group(
@@ -604,18 +636,33 @@ Examples:
     if args.ssh_host:
         if not args.ssh_user:
             parser.error("--ssh-host requires --ssh-user")
+        bind_host = "0.0.0.0" if args.share_proxy else "127.0.0.1"
         tunnel = SshTunnelThread(
             user=args.ssh_user,
             host=args.ssh_host,
             port=args.ssh_port,
             local_port=args.socks_port,
             identity_file=args.ssh_identity,
+            bind_host=bind_host,
         )
         tunnel.start()
         bypass_threads.append(tunnel)
         # Give SSH a moment to establish before the first login attempt
         time.sleep(3)
         _configure_env_proxy(args.socks_port, no_proxy_host=args.ssh_host)
+        if args.share_proxy:
+            local_ip = _get_local_ip()
+            log.info(
+                "Proxy shared on LAN → SOCKS5 %s:%d\n"
+                "  Android setup: WiFi → long-press your network → Modify → Advanced\n"
+                "    Proxy: Manual\n"
+                "    Hostname: %s\n"
+                "    Port:     %d\n"
+                "  For DNS bypass on Android: Settings → Network & internet\n"
+                "    → Private DNS → Private DNS provider hostname\n"
+                "    → enter: 1dot1dot1dot1.cloudflare-dns.com",
+                local_ip, args.socks_port, local_ip, args.socks_port,
+            )
 
     if args.doh:
         watchdog = CloudflaredWatchdog(port=args.doh_port)

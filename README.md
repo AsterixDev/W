@@ -61,21 +61,31 @@ A VPS is just a Linux server in a data centre you control. Oracle's free tier is
 **Step 2 — Run the script with your VPS**
 
 ```bash
+# Mac only
 python3 fortiguard_login.py \
   -u your_username@college.edu \
   --ssh-host <your-vps-ip> \
   --ssh-user ubuntu \
   --ssh-identity ~/.ssh/id_rsa    # omit if using default key
+
+# Mac + Android phone (add --share-proxy)
+python3 fortiguard_login.py \
+  -u your_username@college.edu \
+  --ssh-host <your-vps-ip> \
+  --ssh-user ubuntu \
+  --share-proxy
 ```
+
+`--share-proxy` binds the SOCKS5 proxy on all network interfaces so your Android
+phone (or any other device on the same WiFi) can route through it. The script
+will print your Mac's local IP and the exact Android settings to use.
 
 This:
 - Logs into the FortiGuard portal and keeps the session alive
-- Maintains an SSH SOCKS5 proxy on `localhost:1080`
+- Maintains an SSH SOCKS5 proxy (on `localhost:1080`, or LAN-wide with `--share-proxy`)
 - Auto-restarts the tunnel if it drops
 
-**Step 3 — Point your browser at the proxy**
-
-The tunnel is running on port 1080, but your browser needs to be told to use it.
+**Step 3 — Point your Mac's browser at the proxy**
 
 *Firefox (recommended — no root needed):*
 1. Settings → General → scroll to Network Settings → Settings…
@@ -94,10 +104,31 @@ sudo networksetup -setsocksfirewallproxystate Wi-Fi on
 sudo networksetup -setsocksfirewallproxystate Wi-Fi off
 ```
 
+**Step 4 — Point your Android phone at the proxy**
+
+Your Mac and Android must be on the **same WiFi network** (both on college WiFi).
+
+1. On Android: **Settings → Wi-Fi → long-press your college network → Modify network**
+2. Expand **Advanced options**
+3. Proxy: **Manual**
+4. Proxy hostname: *(your Mac's local IP — printed by the script when `--share-proxy` is set)*
+5. Proxy port: `1080`
+6. Save
+
+To also bypass DNS filtering on Android (no VPS needed for this part):
+- Settings → **Network & internet → Advanced → Private DNS**
+- Select **Private DNS provider hostname**
+- Enter: `1dot1dot1dot1.cloudflare-dns.com`
+- This is Android's built-in DNS-over-HTTPS — works independently of the proxy
+
 **Verify it's working:**
 ```bash
+# On Mac
 curl --socks5 127.0.0.1:1080 https://ipinfo.io
 # Should show your VPS's IP, not your college's IP
+
+# On Android — open https://ipinfo.io in browser
+# Should show your VPS's IP
 ```
 
 ---
@@ -210,6 +241,7 @@ SSH SOCKS5 tunnel:
   --ssh-port PORT     SSH port (default: 22)
   --ssh-identity FILE Path to SSH private key
   --socks-port PORT   Local SOCKS5 port (default: 1080)
+  --share-proxy       Bind proxy on all interfaces so Android/other devices can use it
 
 DNS-over-HTTPS:
   --doh               Start cloudflared proxy-dns
