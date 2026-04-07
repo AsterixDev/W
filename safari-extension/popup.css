@@ -1,0 +1,311 @@
+/* ── Reset & base ────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:            rgba(246, 246, 246, 0.92);
+  --bg-section:    rgba(255, 255, 255, 0.75);
+  --fg:            #1c1c1e;
+  --fg-secondary:  #6c6c70;
+  --fg-warning:    #ff9f0a;
+  --divider:       rgba(0, 0, 0, 0.10);
+  --accent:        #5e5ce6;
+  --accent-hover:  #4b49c8;
+  --track:         rgba(0, 0, 0, 0.12);
+  --thumb:         #ffffff;
+  --shadow:        0 1px 3px rgba(0,0,0,0.14);
+  --radius:        12px;
+  --radius-sm:     8px;
+  --swatch-size:   26px;
+  --font:          -apple-system, "SF Pro Text", system-ui, sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg:            rgba(28, 28, 30, 0.93);
+    --bg-section:    rgba(44, 44, 46, 0.80);
+    --fg:            #f2f2f7;
+    --fg-secondary:  #8e8e93;
+    --divider:       rgba(255, 255, 255, 0.10);
+    --track:         rgba(255, 255, 255, 0.16);
+    --thumb:         #e0e0e6;
+    --shadow:        0 1px 3px rgba(0,0,0,0.40);
+  }
+}
+
+body {
+  font-family:     var(--font);
+  font-size:       13px;
+  line-height:     1.4;
+  color:           var(--fg);
+  background:      var(--bg);
+  backdrop-filter: blur(24px) saturate(180%);
+  width:           284px;
+  min-height:      40px;
+  user-select:     none;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Layout ──────────────────────────────────────────────────────────────── */
+
+.panel {
+  padding: 8px 0 10px;
+}
+
+.section {
+  padding: 10px 16px;
+  background: var(--bg-section);
+  border-radius: var(--radius);
+  margin: 4px 8px;
+}
+
+.section + .section {
+  margin-top: 2px;
+}
+
+/* ── Section header ──────────────────────────────────────────────────────── */
+
+.section-header {
+  display:         flex;
+  align-items:     center;
+  justify-content: space-between;
+  margin-bottom:   8px;
+}
+
+.section-title {
+  font-size:   11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color:       var(--fg-secondary);
+}
+
+/* ── Row ─────────────────────────────────────────────────────────────────── */
+
+.row {
+  display:     flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height:  32px;
+}
+
+.row-label {
+  font-size:   13px;
+  font-weight: 400;
+  color:       var(--fg);
+}
+
+/* ── Toggle switch ───────────────────────────────────────────────────────── */
+
+.toggle {
+  position: relative;
+  width:    44px;
+  height:   26px;
+  flex-shrink: 0;
+}
+
+.toggle input {
+  opacity: 0;
+  width:   0;
+  height:  0;
+  position: absolute;
+}
+
+.toggle-track {
+  position:      absolute;
+  inset:         0;
+  border-radius: 13px;
+  background:    var(--track);
+  transition:    background 0.2s ease;
+  cursor:        pointer;
+}
+
+.toggle input:checked + .toggle-track {
+  background: var(--accent);
+}
+
+.toggle-thumb {
+  position:      absolute;
+  top:           3px;
+  left:          3px;
+  width:         20px;
+  height:        20px;
+  border-radius: 50%;
+  background:    var(--thumb);
+  box-shadow:    var(--shadow);
+  transition:    transform 0.2s ease;
+  pointer-events: none;
+}
+
+.toggle input:checked ~ .toggle-thumb {
+  transform: translateX(18px);
+}
+
+/* ── Toolbar colour ──────────────────────────────────────────────────────── */
+
+.swatches {
+  display:   flex;
+  gap:       6px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+
+.swatch {
+  width:         var(--swatch-size);
+  height:        var(--swatch-size);
+  border-radius: 50%;
+  border:        none;
+  cursor:        pointer;
+  outline:       none;
+  transition:    box-shadow 0.15s ease, transform 0.1s ease;
+  flex-shrink:   0;
+}
+
+.swatch:hover { transform: scale(1.12); }
+
+.swatch.active,
+.swatch:focus-visible {
+  box-shadow: 0 0 0 2px var(--bg-section), 0 0 0 4px var(--accent);
+}
+
+.swatch.reset-swatch {
+  background: transparent;
+  border: 1.5px dashed var(--fg-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  color: var(--fg-secondary);
+  line-height: 1;
+}
+
+.color-custom-row {
+  display:     flex;
+  align-items: center;
+  gap:         8px;
+  margin-top:  8px;
+}
+
+.color-custom-row label {
+  font-size: 12px;
+  color: var(--fg-secondary);
+  flex-shrink: 0;
+}
+
+input[type="color"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width:         32px;
+  height:        26px;
+  border:        none;
+  border-radius: var(--radius-sm);
+  padding:       0;
+  cursor:        pointer;
+  background:    none;
+  overflow:      hidden;
+}
+
+input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+input[type="color"]::-webkit-color-swatch {
+  border: none;
+  border-radius: var(--radius-sm);
+}
+
+.hex-input {
+  flex: 1;
+  font-family: "SF Mono", "Menlo", monospace;
+  font-size:   12px;
+  padding:     4px 8px;
+  border:      1px solid var(--divider);
+  border-radius: var(--radius-sm);
+  background:  var(--bg-section);
+  color:       var(--fg);
+  outline:     none;
+}
+
+.hex-input:focus {
+  border-color: var(--accent);
+}
+
+/* ── Volume ──────────────────────────────────────────────────────────────── */
+
+.volume-display {
+  display:     flex;
+  align-items: baseline;
+  gap:         4px;
+}
+
+.volume-value {
+  font-size:   22px;
+  font-weight: 600;
+  color:       var(--fg);
+  font-variant-numeric: tabular-nums;
+  min-width:   56px;
+  text-align:  right;
+}
+
+.volume-unit {
+  font-size:  13px;
+  color:      var(--fg-secondary);
+}
+
+.volume-slider-row {
+  margin-top: 8px;
+}
+
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width:       100%;
+  height:      4px;
+  border-radius: 2px;
+  background:  var(--track);
+  outline:     none;
+  cursor:      pointer;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width:         20px;
+  height:        20px;
+  border-radius: 50%;
+  background:    var(--thumb);
+  box-shadow:    var(--shadow), 0 0 0 1px rgba(0,0,0,0.12);
+  cursor:        pointer;
+  transition:    transform 0.1s ease;
+}
+
+input[type="range"]:active::-webkit-slider-thumb {
+  transform: scale(1.15);
+}
+
+.volume-labels {
+  display:         flex;
+  justify-content: space-between;
+  margin-top:      4px;
+  font-size:       10px;
+  color:           var(--fg-secondary);
+}
+
+.warning-label {
+  display:     none;
+  margin-top:  6px;
+  font-size:   11px;
+  color:       var(--fg-warning);
+  text-align:  center;
+}
+
+.warning-label.visible { display: block; }
+
+/* ── Accent on slider filled portion ─────────────────────────────────────── */
+/* We update --slider-pct from JS to draw the filled track */
+
+input[type="range"].volume-slider {
+  background: linear-gradient(
+    to right,
+    var(--accent) 0%,
+    var(--accent) var(--slider-pct, 0%),
+    var(--track)  var(--slider-pct, 0%),
+    var(--track)  100%
+  );
+}

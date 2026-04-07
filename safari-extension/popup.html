@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Safari Enhancer</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+<div class="panel">
+
+  <!-- ── Dark Mode ───────────────────────────────────────────────────────── -->
+  <div class="section" id="sec-dark">
+    <div class="row">
+      <span class="row-label">Dark Mode</span>
+      <label class="toggle">
+        <input type="checkbox" id="dark-toggle">
+        <span class="toggle-track"></span>
+        <span class="toggle-thumb"></span>
+      </label>
+    </div>
+  </div>
+
+  <!-- ── Toolbar Colour ──────────────────────────────────────────────────── -->
+  <div class="section" id="sec-toolbar">
+    <div class="section-title">Toolbar Colour</div>
+
+    <div class="swatches" id="swatches">
+      <!-- Reset -->
+      <button class="swatch reset-swatch" data-color="" title="Remove custom colour">×</button>
+      <!-- macOS system accent palette -->
+      <button class="swatch" data-color="#5e5ce6" style="background:#5e5ce6" title="Indigo"></button>
+      <button class="swatch" data-color="#0a84ff" style="background:#0a84ff" title="Blue"></button>
+      <button class="swatch" data-color="#32ade6" style="background:#32ade6" title="Teal"></button>
+      <button class="swatch" data-color="#30d158" style="background:#30d158" title="Green"></button>
+      <button class="swatch" data-color="#ffd60a" style="background:#ffd60a" title="Yellow"></button>
+      <button class="swatch" data-color="#ff9f0a" style="background:#ff9f0a" title="Orange"></button>
+      <button class="swatch" data-color="#ff375f" style="background:#ff375f" title="Pink"></button>
+    </div>
+
+    <div class="color-custom-row">
+      <label for="color-picker">Custom</label>
+      <input type="color" id="color-picker" value="#5e5ce6">
+      <input type="text"  id="hex-input" class="hex-input" maxlength="7" placeholder="#rrggbb" spellcheck="false">
+    </div>
+  </div>
+
+  <!-- ── Volume Boost ─────────────────────────────────────────────────────── -->
+  <div class="section" id="sec-volume">
+    <div class="row">
+      <span class="row-label">Volume Boost</span>
+      <div class="volume-display">
+        <span class="volume-value" id="vol-value">100</span>
+        <span class="volume-unit">%</span>
+      </div>
+    </div>
+
+    <div class="volume-slider-row">
+      <input
+        type="range"
+        id="vol-slider"
+        class="volume-slider"
+        min="100"
+        max="1000"
+        step="10"
+        value="100"
+      >
+      <div class="volume-labels">
+        <span>100%</span>
+        <span>500%</span>
+        <span>1000%</span>
+      </div>
+    </div>
+
+    <div class="warning-label" id="vol-warning">
+      ⚠ Above 500% audio may distort
+    </div>
+  </div>
+
+</div>
+<script src="popup.js"></script>
+</body>
+</html>
