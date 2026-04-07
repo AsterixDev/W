@@ -9,6 +9,8 @@ FortiGuard Captive Portal Auto-Login + Firewall Bypass
 • Optional DNS-over-HTTPS via cloudflared to defeat DNS-based blocks.
 """
 
+from __future__ import annotations
+
 import argparse
 import http.client
 import logging
